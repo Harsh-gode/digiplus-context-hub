@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarClock, Columns3, CornerDownRight, MessageCircleQuestion, Plus, ShieldAlert, Sparkles } from "lucide-react";
+import { ArrowRight, BellRing, CalendarClock, Columns3, CornerDownRight, MessageCircleQuestion, Plus, ShieldAlert, Sparkles } from "lucide-react";
 import { api, fmtDateTime } from "../api";
 import { Empty, KindBadge, PageLoader, SeverityBadge, StatusBadge, useLoad } from "../components/ui";
 import { CountUp, ParticleField } from "../components/Effects";
@@ -51,6 +51,7 @@ function Hero({ d }) {
         <div className="mt-4 flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={() => setNewOpen(true)}><Plus className="w-4 h-4" />New meeting or handover</button>
           <Link to="/items" className="btn-secondary"><Columns3 className="w-4 h-4" />Open the board<ArrowRight className="w-3.5 h-3.5" /></Link>
+          <Link to="/followups" className="btn-secondary"><BellRing className="w-4 h-4" />Who needs a nudge?<ArrowRight className="w-3.5 h-3.5" /></Link>
         </div>
       </div>
       <NewMeetingModal open={newOpen} onClose={() => setNewOpen(false)} people={[]} />

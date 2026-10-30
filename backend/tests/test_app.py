@@ -195,31 +195,3 @@ def test_followup_risk_scoring_and_nudge_trail(client):
 def test_followup_validation(client):
     assert client.post("/api/followups/draft", json={"owner": "Nobody Here"}).status_code == 404
     assert client.post("/api/followups/draft", json={"owner": "x", "tone": "angry"}).status_code == 422
-
-
-def test_gemini_falls_back_to_next_model_on_404(monkeypatch):
-    """A retired model (404) should not break AI: the client moves on to the next model."""
-    import httpx
-    from app.services import ai_client
-
-    seen = []
-
-    def handler(request):
-        model = request.url.path.split("/models/")[1].split(":")[0]
-        seen.append(model)
-        if model == "retired-model":
-            return httpx.Response(404, json={"error": {"message": "not found"}})
-        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": '{"brief": "ok"}'}]}}], "usageMetadata": {}})
-
-    real_client = httpx.Client
-    monkeypatch.setattr(ai_client.httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(handler)))
-    monkeypatch.setattr(settings, "ai_provider", "gemini")
-    monkeypatch.setattr(settings, "gemini_api_key", "AIza-test")
-    monkeypatch.setattr(settings, "gemini_model", "retired-model")
-    monkeypatch.setattr(settings, "gemini_fallback_models", ["good-model"])
-    monkeypatch.setattr(ai_client, "_working_gemini_model", None)
-
-    result = ai_client.call_json("test", "system", "user")
-    assert result.status == "ok" and result.data == {"brief": "ok"}
-    assert seen == ["retired-model", "good-model"]
-    assert ai_client.provider_info()["model"] == "good-model"

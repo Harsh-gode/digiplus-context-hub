@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, CheckSquare, Columns3, CornerDownLeft, LayoutDashboard, MessageCircleQuestion, Search, Users } from "lucide-react";
+import { BellRing, BookOpen, CheckSquare, Columns3, CornerDownLeft, LayoutDashboard, MessageCircleQuestion, Search, Users } from "lucide-react";
 import { api, fmtDate } from "../api";
 
 const PAGES = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard },
   { label: "Meetings & handovers", to: "/meetings", icon: Users },
   { label: "Action items board", to: "/items", icon: Columns3 },
+  { label: "Follow-up autopilot", to: "/followups", icon: BellRing },
   { label: "Knowledge base", to: "/knowledge", icon: BookOpen },
   { label: "Ask team memory", to: "/ask", icon: MessageCircleQuestion },
 ];

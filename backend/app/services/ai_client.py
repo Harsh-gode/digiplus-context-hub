@@ -45,31 +45,15 @@ def _extract_json(text: str) -> dict:
         raise
 
 
-# The Gemini model that last worked; remembered so we don't re-probe retired models on every call.
-_working_gemini_model: str | None = None
-
-
 def _call_gemini(system: str, user: str, client: httpx.Client) -> tuple[str, dict]:
-    """Try the configured model, then the fallbacks, on 404 (model retired or not enabled for this key)."""
-    global _working_gemini_model
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
     }
-    candidates = [_working_gemini_model] if _working_gemini_model else []
-    candidates += [m for m in [settings.gemini_model, *settings.gemini_fallback_models] if m not in candidates]
-    for i, model in enumerate(candidates):
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        r = client.post(url, json=body, headers={"x-goog-api-key": settings.gemini_api_key})
-        if r.status_code == 404 and i < len(candidates) - 1:
-            log.warning("ai.model_unavailable", provider="gemini", model=model, next_model=candidates[i + 1])
-            continue
-        r.raise_for_status()
-        if model != _working_gemini_model:
-            _working_gemini_model = model
-            log.info("ai.model_selected", provider="gemini", model=model)
-        break
+    r = client.post(url, json=body, headers={"x-goog-api-key": settings.gemini_api_key})
+    r.raise_for_status()
     payload = r.json()
     text = payload["candidates"][0]["content"]["parts"][0]["text"]
     usage = payload.get("usageMetadata", {})
@@ -118,7 +102,7 @@ def _call_openai(system: str, user: str, client: httpx.Client) -> tuple[str, dic
 
 
 PROVIDERS = {"gemini": _call_gemini, "anthropic": _call_anthropic, "openai": _call_openai}
-MODELS = {"gemini": lambda: _working_gemini_model or settings.gemini_model, "anthropic": lambda: settings.anthropic_model, "openai": lambda: settings.openai_model}
+MODELS = {"gemini": lambda: settings.gemini_model, "anthropic": lambda: settings.anthropic_model, "openai": lambda: settings.openai_model}
 
 
 def ai_enabled() -> bool:

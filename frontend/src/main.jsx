@@ -13,11 +13,13 @@ import MeetingDetail from "./pages/MeetingDetail";
 import Items from "./pages/Items";
 import Knowledge from "./pages/Knowledge";
 import Ask from "./pages/Ask";
+import Followups from "./pages/Followups";
 
 const NAV = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/meetings", label: "Meetings" },
   { to: "/items", label: "Board" },
+  { to: "/followups", label: "Follow-ups" },
   { to: "/knowledge", label: "Knowledge" },
   { to: "/ask", label: "Ask AI" },
 ];
@@ -96,6 +98,7 @@ function Layout() {
           <Route path="/items" element={<Items />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/ask" element={<Ask />} />
+          <Route path="/followups" element={<Followups />} />
           <Route path="*" element={<div className="card p-8 text-center">Page not found</div>} />
         </Routes>
       </main>

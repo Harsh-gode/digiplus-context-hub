@@ -12,6 +12,7 @@ const EVENT_LABEL = {
   carried_forward: "Carried forward",
   closed: "Closed",
   reopened: "Reopened",
+  nudged: "Follow-up sent",
   title_changed: "Renamed",
   priority_changed: "Priority changed",
   description_changed: "Description edited",
@@ -125,7 +126,7 @@ export default function ItemDrawer({ itemId, onClose, onChanged, people = [] }) 
               <ol className="relative border-l border-slate-200 ml-1.5 space-y-3">
                 {item.history.map((h) => (
                   <li key={h.id} className="ml-4">
-                    <span className={`absolute -left-1.5 w-3 h-3 rounded-full border-2 border-white ${h.event === "closed" ? "bg-emerald-500" : h.event === "carried_forward" ? "bg-orange-400" : h.event === "reassigned" ? "bg-violet-500" : "bg-slate-300"}`} />
+                    <span className={`absolute -left-1.5 w-3 h-3 rounded-full border-2 border-white ${h.event === "closed" ? "bg-emerald-500" : h.event === "carried_forward" ? "bg-orange-400" : h.event === "reassigned" ? "bg-violet-500" : h.event === "nudged" ? "bg-pink-500" : "bg-slate-300"}`} />
                     <div className="text-sm font-medium flex items-center gap-1">
                       {h.event === "reassigned" && <UserRound className="w-3.5 h-3.5 text-violet-500" />}
                       {h.event === "carried_forward" && <CornerDownRight className="w-3.5 h-3.5 text-orange-500" />}
