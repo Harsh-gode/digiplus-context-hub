@@ -1,0 +1,172 @@
+"""End-to-end API tests. AI is mocked so tests are fast, free and deterministic.
+
+Run:  cd backend && pytest -q
+"""
+import json
+import os
+import tempfile
+
+os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/test.db"
+os.environ["LOG_FILE"] = f"{tempfile.mkdtemp()}/test.log"
+os.environ["SEED_ON_START"] = "true"
+os.environ["AI_PROVIDER"] = "none"
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.config import settings  # noqa: E402
+from app.main import app  # noqa: E402
+from app.services import ai_client  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def client():
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture
+def fake_ai(monkeypatch):
+    """Route AI calls to a fake provider that returns whatever the test queues up."""
+    responses = []
+
+    def fake(system, user, http_client):
+        if not responses:
+            raise ai_client.httpx.ConnectError("no response queued")
+        r = responses.pop(0)
+        return (r if isinstance(r, str) else json.dumps(r)), {"input_tokens": 10, "output_tokens": 5}
+
+    monkeypatch.setitem(ai_client.PROVIDERS, "fake", fake)
+    monkeypatch.setitem(ai_client.MODELS, "fake", lambda: "fake-model")
+    monkeypatch.setattr(settings, "ai_provider", "fake")
+    monkeypatch.setattr(settings, "ai_max_retries", 1)
+    monkeypatch.setattr(ai_client.time, "sleep", lambda s: None)
+    return responses
+
+
+def new_meeting(client, **kw):
+    body = {"title": "Test sync", "scheduled_at": "2026-10-30T05:00:00Z", "participants": [{"name": "Asha Rao"}, {"name": "Dev Patel"}]}
+    body.update(kw)
+    r = client.post("/api/meetings", json=body)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def test_health_and_seed(client):
+    assert client.get("/api/health").json()["status"] == "ok"
+    assert len(client.get("/api/meetings").json()) >= 6
+    assert client.get("/api/dashboard").json()["counts"]["open_conflicts"] >= 1
+
+
+def test_request_id_header_and_validation_error(client):
+    r = client.post("/api/meetings", json={"title": "  ", "scheduled_at": "nope"})
+    assert r.status_code == 422
+    body = r.json()
+    assert body["request_id"] == r.headers["X-Request-ID"]
+    assert {d["field"] for d in body["details"]} == {"title", "scheduled_at"}
+
+
+def test_caller_request_id_is_propagated(client):
+    r = client.get("/api/health", headers={"X-Request-ID": "trace-abc123"})
+    assert r.headers["X-Request-ID"] == "trace-abc123"
+
+
+def test_lifecycle_rules(client):
+    m = new_meeting(client)
+    assert client.post(f"/api/meetings/{m['id']}/status", json={"status": "completed"}).status_code == 200
+    r = client.post(f"/api/meetings/{m['id']}/status", json={"status": "cancelled"})
+    assert r.status_code == 409
+
+
+def test_item_reassign_close_and_history(client):
+    m = new_meeting(client)
+    item = client.post(f"/api/meetings/{m['id']}/items", json={"title": "Write docs", "owner": "Asha Rao"}).json()
+    client.patch(f"/api/items/{item['id']}", json={"owner": "Dev Patel", "note": "Asha on leave"})
+    assert client.post(f"/api/items/{item['id']}/close", json={"outcome": "no"}).status_code == 422  # outcome too short
+    closed = client.post(f"/api/items/{item['id']}/close", json={"outcome": "Docs published to wiki"}).json()
+    assert closed["status"] == "done" and closed["outcome"] == "Docs published to wiki"
+    assert [h["event"] for h in closed["history"]] == ["created", "reassigned", "closed"]
+    assert client.post(f"/api/items/{item['id']}/close", json={"outcome": "again please"}).status_code == 409
+
+
+def test_carry_forward_keeps_history(client):
+    m1 = new_meeting(client)
+    open_item = client.post(f"/api/meetings/{m1['id']}/items", json={"title": "Open thing"}).json()
+    done_item = client.post(f"/api/meetings/{m1['id']}/items", json={"title": "Done thing"}).json()
+    client.post(f"/api/items/{done_item['id']}/close", json={"outcome": "Finished it"})
+
+    m2 = client.post(f"/api/meetings/{m1['id']}/follow-up", json={"title": "Test sync 2", "scheduled_at": "2026-11-06T05:00:00Z"}).json()
+    ids = {i["id"] for i in m2["items"]}
+    assert open_item["id"] in ids and done_item["id"] not in ids
+    detail = client.get(f"/api/items/{open_item['id']}").json()
+    assert detail["times_carried"] == 1 and detail["origin_meeting_id"] == m1["id"]
+    assert detail["history"][-1]["event"] == "carried_forward"
+
+
+def test_extract_without_ai_uses_fallback(client):
+    m = new_meeting(client)
+    r = client.post(f"/api/meetings/{m['id']}/extract", json={"raw_text": "Decision: ship on Tuesday\nAction: Dev to fix login bug by Friday"})
+    body = r.json()
+    assert body["ai_status"] == "disabled"
+    assert body["decisions"][0]["text"].startswith("ship on Tuesday")
+    assert body["action_items"][0]["owner"] == "Dev Patel"
+
+
+def test_extract_with_ai(client, fake_ai):
+    fake_ai.append({
+        "summary": "Agreed to ship.",
+        "decisions": [{"text": "Ship on Tuesday", "rationale": "QA done"}],
+        "action_items": [{"title": "Fix login bug", "owner": "Dev Patel", "due_date": "2026-11-03", "priority": "high"}],
+        "open_questions": [],
+    })
+    m = new_meeting(client)
+    body = client.post(f"/api/meetings/{m['id']}/extract", json={"raw_text": "some messy notes here"}).json()
+    assert body["ai_status"] == "ok" and body["action_items"][0]["priority"] == "high"
+
+
+def test_ai_bad_json_retries_then_falls_back(client, fake_ai):
+    fake_ai.extend(["not json at all", '{"wrong": "shape"}'])
+    m = new_meeting(client)
+    body = client.post(f"/api/meetings/{m['id']}/extract", json={"raw_text": "Action: Asha to call client"}).json()
+    assert body["ai_status"] == "fallback"
+    assert body["action_items"][0]["owner"] == "Asha Rao"
+
+
+def test_ai_json_in_code_fence_is_accepted(client, fake_ai):
+    fake_ai.append('Here you go:\n```json\n{"brief": "**TL;DR** – all good"}\n```')
+    m = new_meeting(client)
+    r = client.get(f"/api/meetings/{m['id']}/brief", params={"person": "Dev Patel"}).json()
+    assert r["ai_status"] == "ok" and "TL;DR" in r["brief"]
+
+
+def test_conflict_detection_flags_contradiction(client, fake_ai):
+    # Conflict detector should compare the new decision with the seeded Cloud Hosting Standard.
+    def respond(system, user, http_client):
+        import re
+        key = re.search(r"\[(doc:\d+)\]", user).group(1)
+        return json.dumps({"conflicts": [{"candidate_key": key, "severity": "high", "explanation": "Policy says AWS.", "suggestion": "Get CTO approval."}]}), {}
+
+    ai_client.PROVIDERS["fake"] = respond
+    m = new_meeting(client)
+    detail = client.post(f"/api/meetings/{m['id']}/decisions", json={"text": "Host client staging on GCP to save cost"}).json()
+    assert len(detail["conflicts"]) == 1 and detail["conflicts"][0]["severity"] == "high"
+    cid = detail["conflicts"][0]["id"]
+    assert client.post(f"/api/conflicts/{cid}/resolve", json={"status": "accepted", "resolution_note": "CTO ok"}).json()["status"] == "accepted"
+
+
+def test_ai_hallucinated_reference_is_ignored(client, fake_ai):
+    fake_ai.append({"links": [{"candidate_key": "doc:99999", "item_id": None, "reason": "made up", "score": 0.9}]})
+    m = new_meeting(client, agenda="AWS hosting standard review")
+    r = client.post(f"/api/meetings/{m['id']}/link-knowledge").json()
+    assert all(l["doc_id"] != 99999 for l in r["links"])
+
+
+def test_logs_are_json_with_request_id_and_no_secrets(client, monkeypatch):
+    from app.logging_setup import get_logger
+
+    get_logger("test").info("secret.test", api_key="sk-abcdefghijklmnop", detail="token AIzaSyA1234567890abcdefghijk")
+    client.get("/api/health", headers={"X-Request-ID": "logcheck1"})
+    lines = [json.loads(l) for l in open(settings.log_file, encoding="utf-8") if l.strip()]
+    assert any(l.get("request_id") == "logcheck1" and l["event"] == "http.request" for l in lines)
+    secret_line = next(l for l in lines if l["event"] == "secret.test")
+    assert secret_line["api_key"] == "[REDACTED]" and "AIza" not in secret_line["detail"]

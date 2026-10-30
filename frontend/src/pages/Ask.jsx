@@ -1,0 +1,65 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { BookOpen, CheckSquare, FileText, Gavel, MessageCircleQuestion, Sparkles } from "lucide-react";
+import { api } from "../api";
+import { AIBanner, Markdown, Spinner, useAction } from "../components/ui";
+
+const EXAMPLES = [
+  "Where should the analytics dashboard be hosted?",
+  "What did Rahul hand over to Sneha?",
+  "What's blocking M2?",
+  "What is our P1 incident SLA?",
+];
+const ICON = { doc: BookOpen, meeting: FileText, item: CheckSquare, decision: Gavel };
+const href = (s) => (s.kind === "doc" ? `/knowledge?doc=${s.id}` : s.kind === "meeting" ? `/meetings/${s.id}` : `/items`);
+
+export default function Ask() {
+  const [question, setQuestion] = useState("");
+  const [history, setHistory] = useState([]);
+  const [run, busy] = useAction();
+
+  const ask = async (q) => {
+    const text = (q ?? question).trim();
+    if (text.length < 3) return;
+    const r = await run(() => api.post("/ask", { question: text }));
+    if (r) { setHistory((h) => [{ q: text, ...r }, ...h]); setQuestion(""); }
+  };
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Ask the team memory</h1>
+        <p className="text-sm text-slate-500">Answers come only from your meetings, decisions, action items and documents — with sources.</p>
+      </div>
+      <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="card p-3 flex gap-2">
+        <MessageCircleQuestion className="w-5 h-5 text-slate-400 mt-1.5 shrink-0" />
+        <input className="input border-0 focus:ring-0 px-1" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask anything about past work…" autoFocus />
+        <button className="btn-primary shrink-0" disabled={busy || question.trim().length < 3}>{busy ? <Spinner /> : <Sparkles className="w-4 h-4" />}Ask</button>
+      </form>
+      {!history.length && (
+        <div className="flex flex-wrap gap-2">
+          {EXAMPLES.map((e) => <button key={e} className="chip bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 py-1 px-3" onClick={() => ask(e)}>{e}</button>)}
+        </div>
+      )}
+      {history.map((h, i) => (
+        <div key={i} className="card p-4 space-y-3">
+          <div className="text-sm font-medium text-slate-900">{h.q}</div>
+          <AIBanner status={h.ai_status} message={h.ai_message} />
+          <Markdown text={h.answer} />
+          {h.sources.length > 0 && (
+            <div className="border-t border-slate-100 pt-3 flex flex-wrap gap-2">
+              {h.sources.map((s) => {
+                const Icon = ICON[s.kind] || FileText;
+                return (
+                  <Link key={s.key} to={href(s)} className="chip bg-slate-50 border border-slate-200 text-slate-600 hover:border-indigo-300 py-1 px-2.5">
+                    <Icon className="w-3 h-3" /><span className="text-slate-400">[{s.key}]</span> {s.title}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}

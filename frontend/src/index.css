@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body { @apply bg-slate-50 text-slate-800 antialiased; }
+
+@utility card { @apply bg-white rounded-xl border border-slate-200 shadow-sm; }
+@utility btn { @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed; }
+@utility btn-primary { @apply btn bg-indigo-600 text-white hover:bg-indigo-700; }
+@utility btn-secondary { @apply btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-50; }
+@utility btn-ghost { @apply btn text-slate-600 hover:bg-slate-100; }
+@utility btn-danger { @apply btn bg-white border border-red-200 text-red-600 hover:bg-red-50; }
+@utility input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none; }
+@utility label { @apply block text-xs font-medium text-slate-600 mb-1; }
+@utility chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium; }
+@utility section-title { @apply text-sm font-semibold text-slate-900 flex items-center gap-2; }
