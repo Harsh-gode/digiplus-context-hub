@@ -58,7 +58,7 @@ function CaptureRecap({ meeting, onSaved, people }) {
 
   if (draft)
     return (
-      <Card title="Review AI recap before saving" icon={Sparkles} className="border-indigo-200 ring-4 ring-indigo-50"
+      <Card title="Review AI recap before saving" icon={Sparkles} className="border-brand-200 ring-4 ring-brand-50"
         actions={<button className="btn-ghost" onClick={() => setDraft(null)}><X className="w-4 h-4" />Discard</button>}>
         <div className="p-4 space-y-4">
           <AIBanner status={draft.ai_status} message={draft.ai_message} />
@@ -150,9 +150,9 @@ function BriefPanel({ meeting }) {
           <button className="btn-primary shrink-0" onClick={go} disabled={busy || !person.trim()}>{busy ? <Spinner /> : <Sparkles className="w-4 h-4" />}Brief</button>
         </div>
         {brief && (
-          <div className="rounded-lg bg-indigo-50/50 border border-indigo-100 p-3 space-y-2">
+          <div className="rounded-lg bg-brand-50/50 border border-brand-100 p-3 space-y-2">
             <AIBanner status={brief.ai_status} message={brief.ai_message} />
-            <div className="text-xs font-medium text-indigo-700">For {brief.for_person}</div>
+            <div className="text-xs font-medium text-brand-700">For {brief.for_person}</div>
             <Markdown text={brief.brief} />
             <button className="btn-ghost text-xs -ml-2" onClick={() => navigator.clipboard?.writeText(brief.brief)}>Copy</button>
           </div>
@@ -201,7 +201,7 @@ function Decisions({ meeting, reload }) {
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <ShieldAlert className="w-4 h-4 text-violet-600" />
                   <span className="font-medium text-violet-900">Conflicts with {c.conflicting_doc_id ? "policy" : "earlier decision"}:</span>
-                  {c.conflicting_meeting_id ? <Link className="text-indigo-600 hover:underline" to={`/meetings/${c.conflicting_meeting_id}`}>{c.conflicting_source_title}</Link> : <Link className="text-indigo-600 hover:underline" to="/knowledge">{c.conflicting_source_title}</Link>}
+                  {c.conflicting_meeting_id ? <Link className="text-brand-600 hover:underline" to={`/meetings/${c.conflicting_meeting_id}`}>{c.conflicting_source_title}</Link> : <Link className="text-brand-600 hover:underline" to="/knowledge">{c.conflicting_source_title}</Link>}
                   <SeverityBadge severity={c.severity} />
                   {c.status !== "open" && <span className="chip bg-slate-200 text-slate-600">{c.status === "accepted" ? "intentional change" : "dismissed"}</span>}
                 </div>
@@ -284,19 +284,19 @@ export default function MeetingDetail() {
         const openCount = m.items.filter((i) => !["done", "dropped"].includes(i.status)).length;
 
         return (
-          <div className="space-y-5">
+          <div className="space-y-5 animate-fade-up">
             <div>
-              <Link to="/meetings" className="text-xs text-slate-500 hover:text-indigo-600 inline-flex items-center gap-1"><ArrowLeft className="w-3 h-3" />All meetings</Link>
+              <Link to="/meetings" className="text-xs text-slate-500 hover:text-brand-600 inline-flex items-center gap-1"><ArrowLeft className="w-3 h-3" />All meetings</Link>
               <div className="flex items-start justify-between gap-4 mt-2 flex-wrap">
                 <div>
-                  <h1 className="text-xl font-semibold text-slate-900">{m.title}</h1>
+                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-950">{m.title}</h1>
                   <div className="flex items-center gap-2 mt-1.5 text-sm text-slate-500 flex-wrap">
                     <KindBadge kind={m.kind} /><StatusBadge status={m.status} /><span>{fmtDateTime(m.scheduled_at)}</span>
                     {m.kind === "handover" && <span className="chip bg-violet-50 text-violet-700">{m.handover_from || "?"} <ArrowRight className="w-3 h-3" /> {m.handover_to}</span>}
                   </div>
                   <div className="flex gap-3 mt-2 text-xs">
-                    {m.previous_id && <Link to={`/meetings/${m.previous_id}`} className="text-indigo-600 hover:underline inline-flex items-center gap-1"><ArrowLeft className="w-3 h-3" />Previous</Link>}
-                    {m.next_id && <Link to={`/meetings/${m.next_id}`} className="text-indigo-600 hover:underline inline-flex items-center gap-1">Next<ArrowRight className="w-3 h-3" /></Link>}
+                    {m.previous_id && <Link to={`/meetings/${m.previous_id}`} className="text-brand-600 hover:underline inline-flex items-center gap-1"><ArrowLeft className="w-3 h-3" />Previous</Link>}
+                    {m.next_id && <Link to={`/meetings/${m.next_id}`} className="text-brand-600 hover:underline inline-flex items-center gap-1">Next<ArrowRight className="w-3 h-3" /></Link>}
                   </div>
                 </div>
                 <div className="flex gap-2 flex-wrap">
@@ -380,7 +380,7 @@ export default function MeetingDetail() {
                     {m.links.map((l) => (
                       <Link key={l.id} to={l.doc_id ? `/knowledge?doc=${l.doc_id}` : `/meetings/${l.linked_meeting_id}`} className="block rounded-lg px-2 py-2 hover:bg-slate-50">
                         <div className="text-sm font-medium flex items-center gap-1.5">
-                          {l.doc_id ? <BookOpen className="w-3.5 h-3.5 text-indigo-500" /> : <FileText className="w-3.5 h-3.5 text-slate-400" />}
+                          {l.doc_id ? <BookOpen className="w-3.5 h-3.5 text-brand-500" /> : <FileText className="w-3.5 h-3.5 text-slate-400" />}
                           {l.title}
                           <span className="text-[10px] text-slate-400 ml-auto">{Math.round(l.score * 100)}%</span>
                         </div>

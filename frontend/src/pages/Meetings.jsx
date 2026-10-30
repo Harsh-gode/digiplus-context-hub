@@ -12,9 +12,9 @@ export default function Meetings() {
   const state = useLoad(() => Promise.all([api.get(`/meetings?${qs}`), api.get("/people")]), [qs]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-up">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-xl font-semibold text-slate-900">Meetings & handovers</h1>
+        <div><div className="eyebrow mb-2"><span className="w-6 h-px bg-brand-600" />Workspace</div><h1 className="text-3xl font-semibold tracking-tight text-slate-950">Meetings & <span className="text-gradient">handovers</span></h1></div>
         <button className="btn-primary" onClick={() => setNewOpen(true)}><Plus className="w-4 h-4" />New</button>
       </div>
       <div className="flex gap-2 flex-wrap">

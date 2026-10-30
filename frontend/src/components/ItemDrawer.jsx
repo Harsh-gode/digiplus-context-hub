@@ -52,7 +52,7 @@ export default function ItemDrawer({ itemId, onClose, onChanged, people = [] }) 
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-40 flex justify-end bg-ink-900/30" onMouseDown={onClose}>
       <aside className="w-full max-w-md h-full bg-white shadow-xl overflow-y-auto" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 sticky top-0 bg-white">
           <span className="text-xs font-medium text-slate-500">Action item #{itemId}</span>
@@ -72,9 +72,9 @@ export default function ItemDrawer({ itemId, onClose, onChanged, people = [] }) 
                 {item.times_carried > 0 && <span className="chip bg-orange-50 text-orange-700">carried {item.times_carried}×</span>}
               </div>
               <div className="text-xs text-slate-500 mt-3 space-y-1">
-                <div>Raised in <Link className="text-indigo-600 hover:underline" to={`/meetings/${item.origin_meeting_id}`}>{item.origin_meeting_title}</Link></div>
+                <div>Raised in <Link className="text-brand-600 hover:underline" to={`/meetings/${item.origin_meeting_id}`}>{item.origin_meeting_title}</Link></div>
                 {item.current_meeting_id !== item.origin_meeting_id && (
-                  <div>Now tracked in <Link className="text-indigo-600 hover:underline" to={`/meetings/${item.current_meeting_id}`}>{item.current_meeting_title}</Link></div>
+                  <div>Now tracked in <Link className="text-brand-600 hover:underline" to={`/meetings/${item.current_meeting_id}`}>{item.current_meeting_title}</Link></div>
                 )}
               </div>
             </div>

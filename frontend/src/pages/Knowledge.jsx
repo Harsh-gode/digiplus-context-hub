@@ -49,10 +49,10 @@ export default function Knowledge() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-up">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Knowledge base</h1>
+          <div className="eyebrow mb-2"><span className="w-6 h-px bg-brand-600" />Team knowledge</div><h1 className="text-3xl font-semibold tracking-tight text-slate-950">Knowledge <span className="text-gradient">base</span></h1>
           <p className="text-sm text-slate-500">Team documents, policies and runbooks. Meetings are linked to these automatically.</p>
         </div>
         <button className="btn-primary" onClick={() => setEditing("new")}><Plus className="w-4 h-4" />Add document</button>
@@ -66,7 +66,7 @@ export default function Knowledge() {
           <div className="grid md:grid-cols-5 gap-4">
             <div className="md:col-span-2 card divide-y divide-slate-100 h-fit">
               {docs.map((d) => (
-                <button key={d.id} onClick={() => setParams({ doc: d.id })} className={`w-full text-left px-4 py-3 hover:bg-slate-50 ${String(d.id) === selectedId ? "bg-indigo-50/60" : ""}`}>
+                <button key={d.id} onClick={() => setParams({ doc: d.id })} className={`w-full text-left px-4 py-3 hover:bg-slate-50 ${String(d.id) === selectedId ? "bg-brand-50/60" : ""}`}>
                   <div className="text-sm font-medium">{d.title}</div>
                   <div className="flex gap-1 mt-1 flex-wrap">
                     <span className="chip bg-slate-100 text-slate-600">{d.doc_type}</span>
@@ -93,7 +93,7 @@ export default function Knowledge() {
                       <div className="section-title mb-2">Referenced by</div>
                       {selected.linked_meetings.map((m, i) => (
                         <Link key={i} to={`/meetings/${m.id}`} className="block py-1.5 text-sm">
-                          <span className="text-indigo-600 hover:underline">{m.title}</span>
+                          <span className="text-brand-600 hover:underline">{m.title}</span>
                           <span className="block text-xs text-slate-500">{m.reason}</span>
                         </Link>
                       ))}

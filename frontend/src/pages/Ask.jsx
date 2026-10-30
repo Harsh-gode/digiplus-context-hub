@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { BookOpen, CheckSquare, FileText, Gavel, MessageCircleQuestion, Sparkles } from "lucide-react";
 import { api } from "../api";
 import { AIBanner, Markdown, Spinner, useAction } from "../components/ui";
@@ -17,6 +17,8 @@ export default function Ask() {
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState([]);
   const [run, busy] = useAction();
+  const [params] = useSearchParams();
+  const asked = useRef(false);
 
   const ask = async (q) => {
     const text = (q ?? question).trim();
@@ -25,10 +27,17 @@ export default function Ask() {
     if (r) { setHistory((h) => [{ q: text, ...r }, ...h]); setQuestion(""); }
   };
 
+  // A question passed in the URL (from the dashboard or the command palette) is asked straight away.
+  useEffect(() => {
+    const q = params.get("q");
+    if (q && !asked.current) { asked.current = true; ask(q); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5 max-w-3xl animate-fade-up">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Ask the team memory</h1>
+        <div className="eyebrow mb-2"><span className="w-6 h-px bg-brand-600" />AI assistant</div>
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Ask the team <span className="text-gradient">memory</span></h1>
         <p className="text-sm text-slate-500">Answers come only from your meetings, decisions, action items and documents — with sources.</p>
       </div>
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="card p-3 flex gap-2">
@@ -38,7 +47,7 @@ export default function Ask() {
       </form>
       {!history.length && (
         <div className="flex flex-wrap gap-2">
-          {EXAMPLES.map((e) => <button key={e} className="chip bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 py-1 px-3" onClick={() => ask(e)}>{e}</button>)}
+          {EXAMPLES.map((e) => <button key={e} className="chip bg-white border border-slate-200 text-slate-600 hover:border-brand-300 py-1 px-3" onClick={() => ask(e)}>{e}</button>)}
         </div>
       )}
       {history.map((h, i) => (
@@ -51,7 +60,7 @@ export default function Ask() {
               {h.sources.map((s) => {
                 const Icon = ICON[s.kind] || FileText;
                 return (
-                  <Link key={s.key} to={href(s)} className="chip bg-slate-50 border border-slate-200 text-slate-600 hover:border-indigo-300 py-1 px-2.5">
+                  <Link key={s.key} to={href(s)} className="chip bg-slate-50 border border-slate-200 text-slate-600 hover:border-brand-300 py-1 px-2.5">
                     <Icon className="w-3 h-3" /><span className="text-slate-400">[{s.key}]</span> {s.title}
                   </Link>
                 );

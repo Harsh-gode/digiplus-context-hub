@@ -52,7 +52,7 @@ export default function NewMeetingModal({ open, onClose, people = [], previous =
           <div className="grid grid-cols-2 gap-2">
             {["meeting", "handover"].map((k) => (
               <button type="button" key={k} onClick={() => setF({ ...f, kind: k })}
-                className={`rounded-lg border px-3 py-2 text-left text-sm ${f.kind === k ? "border-indigo-500 bg-indigo-50" : "border-slate-200"}`}>
+                className={`rounded-lg border px-3 py-2 text-left text-sm ${f.kind === k ? "border-brand-500 bg-brand-50" : "border-slate-200"}`}>
                 <div className="font-medium capitalize">{k}</div>
                 <div className="text-xs text-slate-500">{k === "meeting" ? "Agenda, notes, decisions, actions" : "Transfer work when someone leaves or rotates"}</div>
               </button>

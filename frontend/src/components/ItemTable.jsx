@@ -17,7 +17,7 @@ export default function ItemTable({ items, onOpen, showMeeting = false, meetingT
         </thead>
         <tbody>
           {items.map((i) => (
-            <tr key={i.id} onClick={() => onOpen(i.id)} className="border-b border-slate-50 hover:bg-indigo-50/40 cursor-pointer">
+            <tr key={i.id} onClick={() => onOpen(i.id)} className="border-b border-slate-50 hover:bg-brand-50/40 cursor-pointer">
               <td className="py-2.5 px-3">
                 <div className={`font-medium ${["done", "dropped"].includes(i.status) ? "text-slate-400 line-through" : ""}`}>{i.title}</div>
                 <div className="flex gap-1 mt-1 flex-wrap">

@@ -1,18 +1,76 @@
 @import "tailwindcss";
 
+/* =====================================================================
+   THEME — DigiPlus brand (from digiplus.co.in): light surfaces, Space Grotesk,
+   and a coral → magenta → violet-blue gradient for emphasis.
+   Change values here and the whole app follows.
+   ===================================================================== */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+
+  /* Violet-blue accent (links, focus rings, active states) */
+  --color-brand-50: #f2f2fd;
+  --color-brand-100: #e5e5fb;
+  --color-brand-200: #cfcff7;
+  --color-brand-300: #b0b0f0;
+  --color-brand-400: #8c8ce7;
+  --color-brand-500: #6e6fde;
+  --color-brand-600: #5b5bd6;
+  --color-brand-700: #4a48b8;
+  --color-brand-800: #3c3a94;
+  --color-brand-900: #2f2d70;
+
+  /* Gradient stops */
+  --color-coral: #ec5c74;
+  --color-magenta: #b456c4;
+  --color-violet: #5b6ee1;
+
+  /* Dark surfaces + page background */
+  --color-ink-800: #1d1d26;
+  --color-ink-900: #0b0b12;
+  --color-canvas: #f5f5f6;
+
+  --animate-fade-up: fade-up 0.4s ease-out both;
+  --animate-pop: pop 0.18s ease-out both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
 }
 
-body { @apply bg-slate-50 text-slate-800 antialiased; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { from { background-position: -400px 0; } to { background-position: 400px 0; } }
 
-@utility card { @apply bg-white rounded-xl border border-slate-200 shadow-sm; }
-@utility btn { @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed; }
-@utility btn-primary { @apply btn bg-indigo-600 text-white hover:bg-indigo-700; }
-@utility btn-secondary { @apply btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-50; }
+body { @apply bg-canvas text-slate-800 antialiased; }
+
+/* Brand gradient helpers */
+@utility bg-brand-gradient { background-image: linear-gradient(100deg, var(--color-coral), var(--color-magenta) 50%, var(--color-violet)); }
+@utility text-gradient {
+  background-image: linear-gradient(100deg, var(--color-coral), var(--color-magenta) 45%, var(--color-violet));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+@utility eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-600 flex items-center gap-2; }
+
+@utility card { @apply bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_2px_rgba(16,16,40,0.04)]; }
+@utility card-hover { @apply transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(91,91,214,0.12)] hover:border-brand-200; }
+@utility btn { @apply inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100; }
+@utility btn-primary { @apply btn bg-brand-gradient text-white shadow-[0_4px_14px_rgba(180,86,196,0.28)] hover:shadow-[0_6px_20px_rgba(180,86,196,0.38)] hover:brightness-105; }
+@utility btn-solid { @apply btn bg-brand-600 text-white hover:bg-brand-700; }
+@utility btn-secondary { @apply btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400; }
 @utility btn-ghost { @apply btn text-slate-600 hover:bg-slate-100; }
 @utility btn-danger { @apply btn bg-white border border-red-200 text-red-600 hover:bg-red-50; }
-@utility input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none; }
+@utility input { @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100 outline-none; }
 @utility label { @apply block text-xs font-medium text-slate-600 mb-1; }
 @utility chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium; }
 @utility section-title { @apply text-sm font-semibold text-slate-900 flex items-center gap-2; }
+@utility skeleton { @apply rounded-md bg-slate-200; background-image: linear-gradient(90deg, transparent 0, rgb(255 255 255 / 0.6) 50%, transparent 100%); background-size: 400px 100%; background-repeat: no-repeat; animation: var(--animate-shimmer); }
+
+/* Active nav link: gradient underline like the DigiPlus site */
+@utility nav-underline { position: relative; }
+.nav-underline.active::after {
+  content: ""; position: absolute; left: 0.75rem; right: 0.75rem; bottom: -2px; height: 2px; border-radius: 2px;
+  background-image: linear-gradient(90deg, var(--color-coral), var(--color-violet));
+}
+
+/* Respect users who turn animations off */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
