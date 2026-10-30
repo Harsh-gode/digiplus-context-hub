@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BookOpen, ClipboardPaste, Eye, FileText, FileUp, Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 import { api, fmtDate } from "../api";
-import { AIBanner, Empty, Field, Modal, PageLoader, useAction, useLoad } from "../components/ui";
+import { AIBanner, Empty, Field, Modal, PageLoader, Spinner, useAction, useLoad } from "../components/ui";
 import DropZone from "../components/DropZone";
 
 const TYPES = ["document", "policy", "runbook", "spec", "note"];
@@ -36,6 +36,8 @@ function DocForm({ doc, onDone }) {
   const [showText, setShowText] = useState(false);
   const [run, busy] = useAction();
   const [reading, setReading] = useState(false);
+  const [contentDrag, setContentDrag] = useState(false);
+  const contentFileRef = useRef(null);
 
   const onFile = async (file) => {
     setReading(true);
@@ -43,7 +45,13 @@ function DocForm({ doc, onDone }) {
     setReading(false);
     if (r) {
       setAnalysis(r);
-      setF({ title: r.title, content: r.content, tags: r.tags, doc_type: r.doc_type });
+      setShowText(false);
+      setF((cur) => ({
+        title: cur.title.trim() ? cur.title : r.title,
+        content: r.content,
+        tags: [...new Set([...cur.tags, ...r.tags])],
+        doc_type: cur.doc_type !== "document" ? cur.doc_type : r.doc_type,
+      }));
     }
   };
 
@@ -99,9 +107,25 @@ function DocForm({ doc, onDone }) {
           {analysis && !showText ? (
             <button type="button" className="btn-ghost text-xs -ml-2" onClick={() => setShowText(true)}><Eye className="w-3.5 h-3.5" />View or edit the extracted text</button>
           ) : (
-            <Field label={analysis ? "Extracted text" : "Content"} hint="Policies and standards here are what decisions get checked against.">
-              <textarea className="input min-h-48 font-mono text-[13px]" required minLength={10} value={f.content} onChange={(e) => setF({ ...f, content: e.target.value })} />
-            </Field>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="label mb-0">{analysis ? "Extracted text" : "Content"}</span>
+                <button type="button" disabled={reading} className="text-xs font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1 disabled:opacity-50"
+                  onClick={() => contentFileRef.current?.click()}>
+                  {reading ? <Spinner className="w-3.5 h-3.5" /> : <FileUp className="w-3.5 h-3.5" />}{reading ? "Reading…" : "Upload PDF / Word"}
+                </button>
+                <input ref={contentFileRef} type="file" accept=".pdf,.docx,.txt,.md" className="hidden"
+                  onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
+              </div>
+              <div className={`rounded-xl transition ${contentDrag ? "ring-4 ring-brand-100" : ""}`}
+                onDragOver={(e) => { e.preventDefault(); setContentDrag(true); }} onDragLeave={() => setContentDrag(false)}
+                onDrop={(e) => { e.preventDefault(); setContentDrag(false); const file = e.dataTransfer.files?.[0]; if (file) onFile(file); }}>
+                <textarea className="input min-h-48 font-mono text-[13px]" required minLength={10} value={f.content}
+                  placeholder="Paste the text here, or drop a PDF / Word file to fill it in automatically"
+                  onChange={(e) => setF({ ...f, content: e.target.value })} />
+              </div>
+              <span className="text-xs text-slate-400 mt-0.5 block">Policies and standards here are what decisions get checked against.</span>
+            </div>
           )}
           <div className="flex justify-end"><button className="btn-primary" disabled={busy || f.content.trim().length < 10 || f.title.trim().length < 3}>{editing ? "Save changes" : "Add to knowledge base"}</button></div>
         </>
