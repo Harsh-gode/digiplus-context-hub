@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 
-from .api import insights, items, knowledge, meetings
+from .api import followups, insights, items, knowledge, meetings
 from .config import settings
 from .db import Base, SessionLocal, engine
 from .logging_setup import get_logger, request_id_var, setup_logging
@@ -90,6 +90,7 @@ app.include_router(meetings.router)
 app.include_router(items.router)
 app.include_router(knowledge.router)
 app.include_router(insights.router)
+app.include_router(followups.router)
 
 
 # ---- Serve the built React app (single deployable unit) ----

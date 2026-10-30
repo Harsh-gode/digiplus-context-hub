@@ -170,3 +170,28 @@ def test_logs_are_json_with_request_id_and_no_secrets(client, monkeypatch):
     assert any(l.get("request_id") == "logcheck1" and l["event"] == "http.request" for l in lines)
     secret_line = next(l for l in lines if l["event"] == "secret.test")
     assert secret_line["api_key"] == "[REDACTED]" and "AIza" not in secret_line["detail"]
+
+
+def test_followup_risk_scoring_and_nudge_trail(client):
+    board = client.get("/api/followups").json()
+    scores = [i["score"] for o in board["owners"] for i in o["items"]]
+    assert board["summary"]["open"] == len(scores) and board["summary"]["high"] >= 1
+    top = board["owners"][0]["items"][0]
+    assert top["level"] == "high" and top["reasons"]  # every score is explained
+
+    owner = next(o for o in board["owners"] if o["owner"])
+    draft = client.post("/api/followups/draft", json={"owner": owner["owner"], "tone": "firm", "channel": "email"}).json()
+    assert draft["ai_status"] == "disabled" and owner["owner"].split()[0] in draft["message"] and draft["subject"]
+
+    sent = client.post("/api/followups/sent", json={"owner": owner["owner"], "item_ids": draft["item_ids"], "channel": "email"}).json()
+    assert sent["recorded"] == len(draft["item_ids"])
+    history = client.get(f"/api/items/{draft['item_ids'][0]}").json()["history"]
+    assert history[-1]["event"] == "nudged"
+    # a fresh nudge lowers the score so the same person isn't chased twice in a row
+    after = next(i for o in client.get("/api/followups").json()["owners"] for i in o["items"] if i["id"] == draft["item_ids"][0])
+    assert "nudged recently (−15)" in after["reasons"]
+
+
+def test_followup_validation(client):
+    assert client.post("/api/followups/draft", json={"owner": "Nobody Here"}).status_code == 404
+    assert client.post("/api/followups/draft", json={"owner": "x", "tone": "angry"}).status_code == 422

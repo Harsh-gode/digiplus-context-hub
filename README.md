@@ -20,7 +20,7 @@ Paste messy notes, a chat export, an email thread or a transcript → get a revi
 | Record outcomes | Closing an item **requires** an outcome (≥5 chars), stored and shown in history. |
 | Validation & errors | Pydantic validation on every input, business-rule checks (409 for illegal transitions, duplicates, closing twice), consistent error JSON with `request_id`, UI toasts that show the request ID. |
 | Structured logging | See [Logging](#logging). |
-| Special feature | **Decision Conflict Detector** + "Going stale" tracking. See [below](#special-feature-decision-conflict-detector). |
+| Special features | **Decision Conflict Detector**, **Follow-up Autopilot** (slip-risk scores + AI nudges), "Going stale" tracking. See [below](#special-feature-decision-conflict-detector). |
 | Bonus | "Ask the team memory" – Q&A over meetings, decisions, items and docs, answers cite sources. |
 
 ## Architecture
@@ -114,6 +114,14 @@ Example:
 **How it works.** Every time a decision is saved (manually or from a recap), the app retrieves the most related earlier decisions and knowledge-base documents, and asks the AI whether the new decision *contradicts, reverses or violates* any of them (refinements and agreements are explicitly not flagged). Conflicts are stored with severity, a plain-language explanation and a suggested resolution, then surfaced inline under the decision, on the meeting list, and on the dashboard. A human resolves each one as **intentional change** (with a note, e.g. "CTO approved by email") or **not a conflict** — so the decision trail stays honest.
 
 **Why it adds value.** It turns the knowledge base from a passive archive into an active guard-rail, catches costly mistakes (compliance, rework) at the moment they're made, and creates an auditable record of *why* a past decision was overridden. Without AI it degrades to a conservative rule-based check (same topic + mutually exclusive terms like AWS/Azure).
+
+### Second special feature: Follow-up Autopilot
+
+The brief asks the app to *follow up on open items until they are closed*. Showing a list isn't following up, so the Follow-ups page (`/followups`, `services/followup.py`) does it:
+
+1. **Slip-risk score 0–100** for every open item, from a transparent rule model: no owner +25, overdue +35 (+3/day, max +15), due ≤ 2 days and not started +15, each carry-forward +12 (max +30), blocked +20, high priority +10, owner has 4+ open items +10, open 14+ days +5; in progress −10, nudged in the last 2 days −15. Every score shows its reasons, so it can be explained to the person being chased.
+2. **One-click AI nudge** per person: one message covering their riskiest items, friendly or firm, Slack or email (subject line, `mailto:` link to their address). Template fallback without AI.
+3. **Closing the loop:** "Mark as sent" writes a `nudged` event into each item's history (`followup.nudge_sent` log), and a recent nudge lowers the score so nobody is chased twice in a row.
 
 **Companion: "Going stale".** Items carried forward ≥2 times are highlighted on the dashboard with a carried-count badge — they're the ones that quietly die across meetings.
 
