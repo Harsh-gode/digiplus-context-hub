@@ -10,11 +10,12 @@ export class ApiError extends Error {
 
 async function request(method, path, body) {
   let res;
+  const isForm = body instanceof FormData;
   try {
     res = await fetch(`/api${path}`, {
       method,
-      headers: body ? { "Content-Type": "application/json" } : {},
-      body: body ? JSON.stringify(body) : undefined,
+      headers: body && !isForm ? { "Content-Type": "application/json" } : {},
+      body: isForm ? body : body ? JSON.stringify(body) : undefined,
     });
   } catch {
     throw new ApiError("Can't reach the server. Check your connection and try again.", 0);
@@ -33,6 +34,8 @@ export const api = {
   patch: (p, b) => request("PATCH", p, b),
   put: (p, b) => request("PUT", p, b),
   del: (p) => request("DELETE", p),
+  /** Upload one file as multipart/form-data (field name "file"). */
+  upload: (p, file) => { const fd = new FormData(); fd.append("file", file); return request("POST", p, fd); },
 };
 
 export const fmtDate = (d) => (d ? new Date(d.length === 10 ? d + "T00:00:00" : d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—");

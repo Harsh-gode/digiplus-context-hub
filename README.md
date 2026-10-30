@@ -21,6 +21,7 @@ Paste messy notes, a chat export, an email thread or a transcript → get a revi
 | Validation & errors | Pydantic validation on every input, business-rule checks (409 for illegal transitions, duplicates, closing twice), consistent error JSON with `request_id`, UI toasts that show the request ID. |
 | Structured logging | See [Logging](#logging). |
 | Special features | **Decision Conflict Detector**, **Follow-up Autopilot** (slip-risk scores + AI nudges), "Going stale" tracking. See [below](#special-feature-decision-conflict-detector). |
+| Uploads | **Knowledge base:** upload PDF, Word or text; AI suggests title, type, tags and a summary for review (`POST /api/knowledge/analyze`). **Meetings:** upload a Teams transcript (.vtt or .docx export, or .txt); speakers become participants and AI drafts the recap (`POST /api/meetings/{id}/transcript`). 10 MB limit, type checks, nothing executed or written to disk. |
 | Bonus | "Ask the team memory" – Q&A over meetings, decisions, items and docs, answers cite sources. |
 
 ## Architecture

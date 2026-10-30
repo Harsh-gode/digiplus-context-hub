@@ -295,6 +295,26 @@ class ExtractResult(BaseModel):
     open_questions: list[str] = []
     ai_status: str  # ok | fallback | disabled
     ai_message: str = ""
+    # Filled when the recap came from an uploaded transcript
+    source_file: str = ""
+    speakers: list[str] = []
+    speakers_added: list[str] = []
+
+
+class DocAnalysis(BaseModel):
+    """AI suggestions for an uploaded file. Nothing is saved until the user confirms."""
+    filename: str
+    kind: str
+    pages: int
+    chars: int
+    truncated: bool
+    content: str
+    title: str
+    doc_type: str
+    tags: list[str]
+    summary: str
+    ai_status: str
+    ai_message: str = ""
 
 
 class ApplyExtract(BaseModel):

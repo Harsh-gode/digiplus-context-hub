@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..logging_setup import get_logger
 from ..models import KnowledgeDoc, KnowledgeLink, Meeting
-from ..schemas import DocIn, DocOut
+from ..schemas import DocAnalysis, DocIn, DocOut
+from ..services import file_text, intelligence
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge base"])
 log = get_logger("api.knowledge")
@@ -22,6 +23,17 @@ def list_docs(q: str | None = Query(None, max_length=100), db: Session = Depends
         like = f"%{q}%"
         stmt = stmt.where(or_(KnowledgeDoc.title.ilike(like), KnowledgeDoc.content.ilike(like), KnowledgeDoc.tags.ilike(like)))
     return db.scalars(stmt).all()
+
+
+@router.post("/analyze", response_model=DocAnalysis)
+async def analyze_upload(file: UploadFile = File(...)):
+    """Step 1 of an upload: read the file and let AI suggest title, type, tags and a summary. Saves nothing."""
+    ex = await file_text.document_text(file)
+    ai = intelligence.analyze_document(ex.text, ex.filename)
+    log.info("knowledge.file_analyzed", file_kind=ex.kind, pages=ex.pages, chars=len(ex.text),
+             truncated=ex.truncated, tags=len(ai["tags"]), ai_status=ai["ai_status"])
+    return DocAnalysis(filename=ex.filename, kind=ex.kind, pages=ex.pages, chars=len(ex.text), truncated=ex.truncated,
+                       content=ex.text, **ai)
 
 
 @router.post("", response_model=DocOut, status_code=201)

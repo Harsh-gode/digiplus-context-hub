@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { FileText, FileUp, Plus, Trash2, X } from "lucide-react";
 import { api } from "../api";
-import { Field, Modal, useAction } from "./ui";
+import { Field, Modal, useAction, useToast } from "./ui";
 
 const localNow = () => {
   const d = new Date();
@@ -27,7 +27,20 @@ export default function NewMeetingModal({ open, onClose, people = [], previous =
   });
   const [f, setF] = useState(blank);
   const [newName, setNewName] = useState("");
-  useEffect(() => { if (open) setF(blank()); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [transcript, setTranscript] = useState(null);
+  const [fileError, setFileError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef(null);
+  const pickTranscript = (file) => {
+    if (!file) return;
+    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+    if (![".vtt", ".docx", ".txt"].includes(ext)) return setFileError("Use a Teams transcript: .vtt, .docx or .txt");
+    if (file.size > 10 * 1024 * 1024) return setFileError("File is larger than 10 MB");
+    setFileError("");
+    setTranscript(file);
+  };
+  const toast = useToast();
+  useEffect(() => { if (open) { setF(blank()); setTranscript(null); setFileError(""); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addPerson = (name) => {
     const n = name.trim();
@@ -42,7 +55,15 @@ export default function NewMeetingModal({ open, onClose, people = [], previous =
     const body = { ...f, scheduled_at: new Date(f.scheduled_at).toISOString(), participants: participants.map((name) => ({ name })) };
     const path = previous ? `/meetings/${previous.id}/follow-up` : "/meetings";
     const m = await run(() => api.post(path, body), previous ? "Follow-up created — open items carried forward" : "Created");
-    if (m) { onClose(); nav(`/meetings/${m.id}`); }
+    if (!m) return;
+    let draft = null;
+    if (transcript) {
+      // Meeting is saved first; a transcript problem shouldn't lose the meeting.
+      draft = await run(() => api.upload(`/meetings/${m.id}/transcript`, transcript));
+      if (draft?.speakers_added?.length) toast(`Added ${draft.speakers_added.length} speakers from the transcript`);
+    }
+    onClose();
+    nav(`/meetings/${m.id}`, { state: draft ? { draft } : null });
   };
 
   return (
@@ -67,7 +88,30 @@ export default function NewMeetingModal({ open, onClose, people = [], previous =
             <Field label="Taking over *"><input className="input" list="np-people" required value={f.handover_to} onChange={(e) => setF({ ...f, handover_to: e.target.value })} /></Field>
           </div>
         )}
-        <Field label="Agenda"><textarea className="input min-h-20" value={f.agenda} onChange={(e) => setF({ ...f, agenda: e.target.value })} /></Field>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="label mb-0">Agenda</span>
+            <button type="button" className="text-xs font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1" onClick={() => fileRef.current?.click()}>
+              <FileUp className="w-3.5 h-3.5" />Upload Teams transcript
+            </button>
+            <input ref={fileRef} type="file" accept=".vtt,.docx,.txt" className="hidden" onChange={(e) => { pickTranscript(e.target.files?.[0]); e.target.value = ""; }} />
+          </div>
+          <div className={`rounded-xl transition ${dragOver ? "ring-4 ring-brand-100" : ""}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); pickTranscript(e.dataTransfer.files?.[0]); }}>
+            <textarea className="input min-h-20" value={f.agenda} onChange={(e) => setF({ ...f, agenda: e.target.value })}
+              placeholder="Type the agenda, or drop a Teams transcript (.vtt / .docx / .txt) here" />
+          </div>
+          {fileError && <div className="text-xs text-red-600 mt-1">{fileError}</div>}
+          {transcript && (
+            <div className="mt-2 flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2 text-sm animate-pop">
+              <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+              <span className="truncate flex-1 font-medium">{transcript.name}</span>
+              <span className="text-xs text-slate-500 hidden sm:inline">AI drafts the recap after you create</span>
+              <button type="button" className="btn-ghost p-1" onClick={() => setTranscript(null)} aria-label="Remove transcript"><X className="w-4 h-4" /></button>
+            </div>
+          )}
+        </div>
         <div>
           <span className="label">Participants</span>
           <div className="flex flex-wrap gap-1.5 mb-2">
@@ -92,7 +136,7 @@ export default function NewMeetingModal({ open, onClose, people = [], previous =
         )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" disabled={busy}>{previous ? "Create follow-up" : "Create"}</button>
+          <button className="btn-primary" disabled={busy}>{busy && transcript ? "Reading transcript…" : previous ? "Create follow-up" : transcript ? "Create & draft recap" : "Create"}</button>
         </div>
       </form>
     </Modal>

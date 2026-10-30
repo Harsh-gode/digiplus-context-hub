@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, ChevronRight, FileText, Gavel, Link2, ListChecks, MessageSquareText,
   Pencil, Plus, RefreshCw, ShieldAlert, Sparkles, Trash2, UserCheck, UserX, Wand2, X,
 } from "lucide-react";
 import { api, fmtDate, fmtDateTime } from "../api";
 import {
-  AIBanner, Empty, Field, KindBadge, Markdown, PageLoader, PriorityBadge, SeverityBadge, SourceTag, Spinner, StatusBadge, useAction, useLoad,
+  AIBanner, Empty, Field, KindBadge, Markdown, PageLoader, PriorityBadge, SeverityBadge, SourceTag, Spinner, StatusBadge, useAction, useLoad, useToast,
 } from "../components/ui";
+import DropZone from "../components/DropZone";
 import ItemDrawer from "../components/ItemDrawer";
 import ItemTable from "../components/ItemTable";
 import NewMeetingModal from "../components/NewMeetingModal";
@@ -32,12 +33,25 @@ function Card({ title, icon: Icon, actions, children, id, className = "" }) {
 }
 
 // ---------------- AI capture: raw text -> reviewed recap ----------------
-function CaptureRecap({ meeting, onSaved, people }) {
+function CaptureRecap({ meeting, onSaved, people, initialDraft }) {
   const [raw, setRaw] = useState("");
   const [source, setSource] = useState("notes");
-  const [draft, setDraft] = useState(null);
+  const [draft, setDraft] = useState(initialDraft || null);
   const [run, busy] = useAction();
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const toast = useToast();
+
+  const uploadTranscript = async (file) => {
+    setUploading(true);
+    const r = await run(() => api.upload(`/meetings/${meeting.id}/transcript`, file));
+    setUploading(false);
+    if (r) {
+      setDraft(r);
+      onSaved(false);
+      if (r.speakers_added?.length) toast(`Added ${r.speakers_added.length} speaker${r.speakers_added.length > 1 ? "s" : ""} from the transcript as participants`);
+    }
+  };
 
   const generate = async (useExisting) => {
     const body = useExisting ? { save_note: false } : { raw_text: raw, source, save_note: true };
@@ -61,6 +75,12 @@ function CaptureRecap({ meeting, onSaved, people }) {
       <Card title="Review AI recap before saving" icon={Sparkles} className="border-brand-200 ring-4 ring-brand-50"
         actions={<button className="btn-ghost" onClick={() => setDraft(null)}><X className="w-4 h-4" />Discard</button>}>
         <div className="p-4 space-y-4">
+          {draft.source_file && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <FileText className="w-3.5 h-3.5 text-brand-600" /><span className="font-medium text-slate-700">{draft.source_file}</span>
+              {draft.speakers?.length > 0 && <span>· {draft.speakers.length} speakers: {draft.speakers.join(", ")}</span>}
+            </div>
+          )}
           <AIBanner status={draft.ai_status} message={draft.ai_message} />
           <Field label="Summary"><textarea className="input min-h-20" value={draft.summary} onChange={(e) => setDraft({ ...draft, summary: e.target.value })} /></Field>
           <div>
@@ -109,6 +129,10 @@ function CaptureRecap({ meeting, onSaved, people }) {
   return (
     <Card title="Capture what happened" icon={Wand2}>
       <div className="p-4 space-y-3">
+        <DropZone accept=".vtt,.docx,.txt" onFile={uploadTranscript} busy={uploading} compact
+          title="Upload a Teams transcript"
+          hint="Teams → meeting → Recap → Transcript → Download (.vtt or .docx). AI writes the summary, decisions and tasks." />
+        <div className="flex items-center gap-3 text-[11px] uppercase tracking-wider text-slate-400"><span className="h-px flex-1 bg-slate-200" />or paste text<span className="h-px flex-1 bg-slate-200" /></div>
         <textarea className="input min-h-32 font-mono text-[13px]" value={raw} onChange={(e) => setRaw(e.target.value)}
           placeholder={"Paste anything: rough notes, a Teams/Slack export, an email thread or a transcript.\n\nAI turns it into a summary, decisions and action items with owners and due dates — you review before anything is saved."} />
         <div className="flex gap-2 flex-wrap items-center">
@@ -254,6 +278,9 @@ function AddItem({ meetingId, people, onAdded }) {
 export default function MeetingDetail() {
   const { id } = useParams();
   const nav = useNavigate();
+  const location = useLocation();
+  // A recap drafted from a transcript attached in the "New meeting" form arrives in navigation state.
+  const initialDraft = location.state?.draft || null;
   const state = useLoad(() => Promise.all([api.get(`/meetings/${id}`), api.get("/people")]), [id]);
   const [openItem, setOpenItem] = useState(null);
   const [followUp, setFollowUp] = useState(false);
@@ -311,7 +338,7 @@ export default function MeetingDetail() {
 
             <div className="grid lg:grid-cols-3 gap-5">
               <div className="lg:col-span-2 space-y-5">
-                <CaptureRecap meeting={m} people={people} onSaved={(done, r) => (done ? setMeeting(r) : state.reload())} />
+                <CaptureRecap key={m.id} meeting={m} people={people} initialDraft={initialDraft} onSaved={(done, r) => { if (done) { nav(".", { replace: true, state: null }); setMeeting(r); } else state.reload(); }} />
 
                 <Card title="Summary" icon={FileText} actions={editSummary === null && <button className="btn-ghost p-1" onClick={() => setEditSummary(m.summary)} aria-label="Edit summary"><Pencil className="w-3.5 h-3.5" /></button>}>
                   <div className="p-4">

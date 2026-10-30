@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,7 @@ from ..schemas import (
     ApplyExtract, BriefResult, DecisionIn, ExtractRequest, ExtractResult, ItemCreate, ItemOut, MeetingCreate,
     MeetingDetail, MeetingSummaryOut, MeetingUpdate, NoteIn, ParticipantIn, StatusChange,
 )
-from ..services import intelligence
+from ..services import file_text, intelligence
 from ..services import workflow as wf
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
@@ -203,6 +203,30 @@ def extract(meeting_id: int, body: ExtractRequest, db: Session = Depends(get_db)
     log.info("recap.extracted", meeting_id=m.id, ai_status=result["ai_status"], decisions=len(result["decisions"]),
              items=len(result["action_items"]))
     return ExtractResult(**result)
+
+
+@router.post("/{meeting_id}/transcript", response_model=ExtractResult)
+async def upload_transcript(meeting_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload a Teams transcript (.vtt / .docx / .txt): save it as a note, add new speakers, return a draft recap."""
+    m = wf.get_meeting_or_404(db, meeting_id)
+    ex = await file_text.transcript_text(file)
+
+    known = {p.name.lower() for p in m.participants}
+    added = []
+    for name in ex.speakers:
+        if name.lower() not in known and len(m.participants) < 100:
+            m.participants.append(Participant(name=name[:120], attended=True, role="from transcript"))
+            known.add(name.lower())
+            added.append(name)
+    m.notes.append(Note(content=ex.text, source="transcript", author=ex.filename))
+    db.commit()
+    log.info("transcript.uploaded", meeting_id=m.id, file_kind=ex.kind, chars=len(ex.text), speakers=len(ex.speakers),
+             speakers_added=len(added), truncated=ex.truncated)
+
+    result = intelligence.extract_recap(ex.text, m.title, m.scheduled_at, [p.name for p in m.participants], m.agenda)
+    log.info("recap.extracted", meeting_id=m.id, ai_status=result["ai_status"], decisions=len(result["decisions"]),
+             items=len(result["action_items"]), source="transcript")
+    return ExtractResult(**result, source_file=ex.filename, speakers=ex.speakers, speakers_added=added)
 
 
 @router.post("/{meeting_id}/apply-recap", response_model=MeetingDetail)

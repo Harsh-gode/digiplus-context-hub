@@ -91,14 +91,30 @@ def extract_recap(text: str, meeting_title: str, meeting_date: datetime, partici
     return fb
 
 
-_DECISION_RE = re.compile(r"^\s*(?:[-*•]\s*)?(?:decision|decided|agreed|we will|resolution|approved)\b[:\s-]*(.+)", re.I)
+_DECISION_RE = re.compile(r"^\s*(?:[-*•]\s*)?(?:decision|decided|agreed|we agreed|we decided|resolution|approved)\b[:\s-]*(.+)", re.I)
 _ACTION_RE = re.compile(
     r"^\s*(?:[-*•]\s*)?(?:\[ \]\s*|todo[:\s]|action(?: item)?[:\s]|ai[:\s]|follow[- ]up[:\s])\s*(.+)", re.I
 )
-_WILL_RE = re.compile(r"^\s*(?:[-*•]\s*)?([A-Z][a-z]+)\s+(?:will|to|should|must|needs to)\s+(.+)")
+# "Riya will handle…", "Vikram to set up…", "Sneha should send…" — a capitalised name followed by a commitment verb.
+_WILL_RE = re.compile(r"^\s*(?:[-*•]\s*)?([A-Z][a-z]+)\s+(?:will|to|should|must|needs to|is going to|has to)\s+(.+)")
+# "We need to finish…", "We must…" — a team task with no named owner.
+_TEAM_TASK_RE = re.compile(r"^\s*(?:[-*•]\s*)?(?:we|the team)\s+(?:need to|needs to|must|have to|should)\s+(.+)", re.I)
+# "Dev Patel: I will fix the bug" — a transcript line with its speaker in front.
+_SPEAKER_PREFIX = re.compile(r"^(?P<name>[A-Z][\w.'\-]*(?: [A-Z][\w.'\-]*){0,3}):\s+(?P<text>.+)$")
+_FIRST_PERSON = re.compile(r"^(?:I(?:'ll| will| am going to| need to| have to| can| should)|I'm going to)\s+(.+)", re.I)
+_LABELS = {"Decision", "Action", "Todo", "TODO", "Note", "AI", "Follow-up", "Agenda", "Summary", "Question", "Risk"}
+_NOT_NAMES = {"We", "I", "They", "You", "He", "She", "It", "Team", "Everyone", "Someone", "This", "That", "There", "Who", "What", "Also", "Then", "Next", "Please", "Hey", "Hi"}
 _OWNER_AT_RE = re.compile(r"@([A-Za-z]+)")
 _ISO_DATE_RE = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
 _WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def _sentences(text: str) -> list[str]:
+    """Split notes into lines AND sentences, so a pasted paragraph is read item by item."""
+    out = []
+    for line in (text or "").splitlines():
+        out += [p.strip() for p in re.split(r"(?<=[.!?])\s+(?=[A-Z@\-*•])", line) if p.strip()]
+    return out
 
 
 def _guess_due(text: str, base: date) -> date | None:
@@ -141,33 +157,55 @@ def fallback_extract(text: str, meeting_date: datetime, participants: list[str])
     """Deterministic extraction from common note-taking conventions."""
     decisions, items = [], []
     base = meeting_date.date()
-    for line in (text or "").splitlines():
-        if not line.strip():
-            continue
+    for raw_line in _sentences(text):
+        # Strip a transcript speaker prefix, remembering who said it.
+        speaker, line = "", raw_line
+        if (sp := _SPEAKER_PREFIX.match(raw_line)) and sp.group("name") not in _LABELS:
+            speaker, line = sp.group("name"), sp.group("text")
         if m := _DECISION_RE.match(line):
             decisions.append(ExtractedDecision(text=m.group(1).strip().rstrip(".") + "."))
             continue
-        action = None
+        action, owner = None, ""
         if m := _ACTION_RE.match(line):
             action = m.group(1).strip()
-        elif (m := _WILL_RE.match(line)) and any(p.split()[0] == m.group(1) for p in participants):
+        elif (m := _WILL_RE.match(line)) and m.group(1) not in _NOT_NAMES:
             action = line.strip(" -*•")
+            # Use the participant's full name when we know them; otherwise keep the name as written.
+            owner = next((p for p in participants if p.split()[0] == m.group(1)), m.group(1))
+        elif speaker and (m := _FIRST_PERSON.match(line)):
+            # "I will fix the login bug" said by Dev → Dev owns "Fix the login bug"
+            action = m.group(1).strip()[0].upper() + m.group(1).strip()[1:]
+            owner = next((p for p in participants if p.split()[0] == speaker.split()[0]), speaker)
+        elif m := _TEAM_TASK_RE.match(line):
+            action = m.group(1).strip()[0].upper() + m.group(1).strip()[1:]
         if action:
+            action = action.rstrip(".")
             items.append(
                 ExtractedItem(
                     title=action[:300],
-                    owner=_guess_owner(action, participants),
+                    owner=owner or _guess_owner(action, participants),
                     due_date=_guess_due(action, base),
                     priority="high" if re.search(r"urgent|asap|blocker|critical|p0|p1", action, re.I) else "medium",
                 )
             )
-    sentences = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text or "").strip())
-    summary = " ".join(sentences[:3])[:600] if sentences and sentences[0] else "No notes yet."
+    speakers = list(dict.fromkeys(
+        m.group("name") for l in (text or "").splitlines() if (m := _SPEAKER_PREFIX.match(l.strip())) and m.group("name") not in _LABELS
+    ))
+    if len(speakers) >= 2:
+        # A transcript: describe it instead of repeating its first lines.
+        summary = (f"Discussion between {', '.join(speakers[:6])}{' and others' if len(speakers) > 6 else ''}. "
+                   f"{len(decisions)} decision{'s' if len(decisions) != 1 else ''} and {len(items)} action item{'s' if len(items) != 1 else ''} "
+                   f"were picked out automatically; review them before saving.")
+        if decisions:
+            summary += f" Key decision: {decisions[0].text}"
+    else:
+        sentences = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text or "").strip())
+        summary = " ".join(sentences[:3])[:600] if sentences and sentences[0] else "No notes yet."
     return {
         "summary": summary,
         "decisions": decisions,
         "action_items": items,
-        "open_questions": [l.strip(" -*•") for l in (text or "").splitlines() if l.strip().endswith("?")][:5],
+        "open_questions": [l.strip(" -*•") for l in _sentences(text) if l.endswith("?")][:5],
     }
 
 
@@ -343,6 +381,76 @@ def detect_conflicts(decision_text: str, meeting_title: str, candidates: list[Ca
                 })
                 break
     return {"conflicts": out, "ai_status": result.status, "ai_message": result.message}
+
+
+# ============================================================================
+# 6. Uploaded document -> title, type, tags, summary (for the knowledge base)
+# ============================================================================
+DOC_SYSTEM = """You file documents into an IT services team's knowledge base.
+Read the document and return:
+- title: a clear, specific title (max 80 chars). Prefer the document's own title if it has one.
+- doc_type: exactly one of policy (rules people must follow), runbook (step-by-step procedures), spec (requirements, scope, design), note (meeting notes, informal), document (anything else).
+- tags: 3-8 short lowercase tags (1-2 words each) for the topics, systems, clients and teams it covers. Use hyphens, not spaces.
+- summary: 1-2 sentences on what the document is and why the team would look it up.
+Only use what the document says. Return JSON: {"title": str, "doc_type": str, "tags": [str], "summary": str}"""
+
+_DOC_TYPES = ("policy", "runbook", "spec", "note", "document")
+
+
+def _validate_doc(d: dict) -> None:
+    if not isinstance(d.get("title"), str) or not d["title"].strip():
+        raise ValueError("title missing")
+    if not isinstance(d.get("tags"), list):
+        raise ValueError("tags missing")
+
+
+def _clean_tags(tags) -> list[str]:
+    out = []
+    for t in tags or []:
+        t = re.sub(r"[^a-z0-9\-+.]", "", str(t).strip().lower().replace(" ", "-"))[:30]
+        if t and t not in out:
+            out.append(t)
+    return out[:8]
+
+
+def analyze_document(text: str, filename: str) -> dict:
+    user = f"File name: {filename}\n\n--- DOCUMENT ---\n{_clip(text, 12_000)}"
+    result = call_json("analyze_document", DOC_SYSTEM, user, validate=_validate_doc)
+    if result.data:
+        d = result.data
+        return {
+            "title": d["title"].strip()[:200],
+            "doc_type": d.get("doc_type") if d.get("doc_type") in _DOC_TYPES else "document",
+            "tags": _clean_tags(d.get("tags")),
+            "summary": str(d.get("summary") or "").strip()[:600],
+            "ai_status": "ok", "ai_message": "",
+        }
+    fb = fallback_document(text, filename)
+    fb.update(ai_status=result.status, ai_message=result.message)
+    return fb
+
+
+def fallback_document(text: str, filename: str) -> dict:
+    """Title from the first heading-like line or the file name; type from keywords; tags = most frequent topic words."""
+    first = next((l.strip() for l in text.splitlines() if 4 <= len(l.strip()) <= 90), "")
+    stem = re.sub(r"[_\-]+", " ", re.sub(r"\.[A-Za-z0-9]+$", "", filename)).strip()
+    title = (first if first and not first.endswith(".") else stem.title()) or "Untitled document"
+    low = text.lower()
+    scores = {
+        "policy": len(re.findall(r"\b(must|shall|policy|standard|required|prohibited|compliance)\b", low)),
+        "runbook": len(re.findall(r"\b(step \d|runbook|rollback|procedure|on-call|restart|deploy)\b", low)),
+        "spec": len(re.findall(r"\b(requirement|scope|milestone|acceptance|specification|out of scope)\b", low)),
+    }
+    best = max(scores, key=scores.get)
+    doc_type = best if scores[best] >= 2 else "document"
+    counts = {}
+    for w in tokenize(text):
+        if len(w) > 3 and not w.isdigit():
+            counts[w] = counts.get(w, 0) + 1
+    tags = [w for w, _ in sorted(counts.items(), key=lambda kv: -kv[1])[:6]]
+    sentences = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text).strip())
+    return {"title": title[:200], "doc_type": doc_type, "tags": _clean_tags(tags),
+            "summary": " ".join(sentences[:2])[:300]}
 
 
 # ============================================================================

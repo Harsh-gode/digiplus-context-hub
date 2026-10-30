@@ -45,15 +45,34 @@ def _extract_json(text: str) -> dict:
         raise
 
 
+# The Gemini model that last worked; remembered so we don't re-probe retired models on every call.
+_working_gemini_model: str | None = None
+
+
 def _call_gemini(system: str, user: str, client: httpx.Client) -> tuple[str, dict]:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
+    """Try the configured model, then the fallbacks, when a model is missing (404) or busy (429/500/503).
+
+    A busy model is usually busy for everyone using it; a different model often answers straight away.
+    """
+    global _working_gemini_model
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
     }
-    r = client.post(url, json=body, headers={"x-goog-api-key": settings.gemini_api_key})
-    r.raise_for_status()
+    candidates = [_working_gemini_model] if _working_gemini_model else []
+    candidates += [m for m in [settings.gemini_model, *settings.gemini_fallback_models] if m not in candidates]
+    for i, model in enumerate(candidates):
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        r = client.post(url, json=body, headers={"x-goog-api-key": settings.gemini_api_key})
+        if r.status_code in (404, 429, 500, 503) and i < len(candidates) - 1:
+            log.warning("ai.model_unavailable", provider="gemini", model=model, status=r.status_code, next_model=candidates[i + 1])
+            continue
+        r.raise_for_status()
+        if model != _working_gemini_model:
+            _working_gemini_model = model
+            log.info("ai.model_selected", provider="gemini", model=model)
+        break
     payload = r.json()
     text = payload["candidates"][0]["content"]["parts"][0]["text"]
     usage = payload.get("usageMetadata", {})
@@ -102,7 +121,7 @@ def _call_openai(system: str, user: str, client: httpx.Client) -> tuple[str, dic
 
 
 PROVIDERS = {"gemini": _call_gemini, "anthropic": _call_anthropic, "openai": _call_openai}
-MODELS = {"gemini": lambda: settings.gemini_model, "anthropic": lambda: settings.anthropic_model, "openai": lambda: settings.openai_model}
+MODELS = {"gemini": lambda: _working_gemini_model or settings.gemini_model, "anthropic": lambda: settings.anthropic_model, "openai": lambda: settings.openai_model}
 
 
 def ai_enabled() -> bool:
@@ -165,7 +184,7 @@ def call_json(task: str, system: str, user: str, validate=None) -> AIResult:
                 latency_ms=int((time.perf_counter() - t0) * 1000),
             )
             if attempt < attempts:
-                time.sleep(0.6 * attempt)
+                time.sleep(1.5 * attempt)  # back off: 1.5 s, then 3 s
 
     total = int((time.perf_counter() - started) * 1000)
     log.warning("ai.fallback", task=task, provider=provider, reason=last_error, total_latency_ms=total)
