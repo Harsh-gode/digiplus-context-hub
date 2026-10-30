@@ -72,7 +72,7 @@ Set **one** key; the provider is auto-detected (or force it with `AI_PROVIDER`).
 
 | Provider | Env vars | Default model |
 |---|---|---|
-| Google Gemini (free tier available) | `GEMINI_API_KEY` | `gemini-2.5-flash` |
+| Google Gemini (free tier available) | `GEMINI_API_KEY` | `gemini-3.6-flash`, falling back to `gemini-3.8-flash`, `gemini-3.5-flash-lite`, `gemini-2.5-flash` on 404 |
 | Anthropic Claude | `ANTHROPIC_API_KEY` | `claude-haiku-4-5` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-4o-mini` |
 

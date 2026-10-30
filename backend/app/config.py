@@ -18,7 +18,11 @@ class Settings:
     # AI provider: "gemini" | "anthropic" | "openai" | "none". Auto-detected from available keys if unset.
     ai_provider: str = os.getenv("AI_PROVIDER", "").lower()
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    # Tried in order if the main model returns 404 (retired, or not enabled for this key).
+    gemini_fallback_models: list[str] = [
+        m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS", "gemini-3.8-flash,gemini-3.5-flash-lite,gemini-2.5-flash").split(",") if m.strip()
+    ]
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
